@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 )
 
 func main() {
@@ -15,55 +14,53 @@ func main() {
 	}
 
 	urlStr := os.Args[1]
+	match, _ := regexp.MatchString("^[http|//]", urlStr)
+	if !match {
+		urlStr = "https://" + urlStr
+	}
 	location, err := url.Parse(urlStr)
 	if err != nil {
 		fmt.Printf("You must enter a URL. You entered %s.", urlStr)
 	}
 
-	if location.Scheme == "" {
-		location.Scheme = "https"
+	p := &Page{
+		URL: location,
 	}
 
-	p, err := fetchPage(location)
-	if err != nil {
+	fetchErr := p.FetchPage()
+	if fetchErr != nil {
+		fmt.Println("We could not fetch your main page.")
 		return
 	}
 
-	// fmt.Println(p.Text)
-
-	for _, childPage := range p.ChildPages {
-		go func(u *url.URL) {
-			fmt.Println(u)
-		}(childPage.URL)
-	}
-}
-
-func fetchPage(url *url.URL) (*Page, error) {
-	resp, err := http.Get(url.String())
-	if err != nil {
-		fmt.Printf("Could not fetch the page %s", url)
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Printf("Could not read the page %s", url)
-		return nil, err
+	c := make(chan *Page, len(p.ChildPages))
+	errChan := make(chan error)
+	for i := range p.ChildPages {
+		go func(child *Page) {
+			err := child.FetchPage()
+			if err != nil {
+				errChan <- err
+			}
+			c <- child
+		}(p.ChildPages[i])
 	}
 
-	return &Page{
-		URL:  url,
-		Text: string(bodyBytes),
-	}, nil
+	for i := 0; i < len(p.ChildPages); i++ {
+		select {
+		case e := <-errChan:
+			fmt.Println(e)
+		case <-c:
+			// noop
+		}
+	}
+	close(c)
+	close(errChan)
+
+	countWords(append(p.ChildPages, p))
 }
 
-func extractHTML(string) string {
-	return ""
-}
-
-func countWords(text string) map[string]int {
-	var counts map[string]int
+func countWords(pages []*Page) map[string]int {
+	counts := make(map[string]int)
 
 	return counts
 }
