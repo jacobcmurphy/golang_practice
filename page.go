@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -25,7 +26,13 @@ func (p *Page) FetchPage() error {
 		return errors.New("the page must have a URL")
 	}
 
-	resp, err := http.Get(p.URL.String())
+	fmt.Println("URL: ", p.URL.String())
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}}
+	resp, err := client.Get(p.URL.String())
+
 	if err != nil {
 		return err
 	}
@@ -53,10 +60,7 @@ func (p *Page) parseText() {
 
 func childFromLinkTags(p *Page) *Parser {
 	condition := func(n *html.Node) bool {
-		if !(n.Type == html.ElementNode && n.Data == "a") {
-			return false
-		}
-		return true
+		return n.Type == html.ElementNode && n.Data == "a"
 	}
 
 	parseFunc := func(n *html.Node) {
@@ -64,18 +68,15 @@ func childFromLinkTags(p *Page) *Parser {
 			if a.Key != "href" {
 				continue
 			}
-			url, _ := url.Parse(a.Val)
-
-			// TODO: filter out mailto links
-			if url.String() == p.URL.String() {
+			linkToParent := a.Val == p.URL.String()
+			contactLink, _ := regexp.MatchString("(mailto:|tel:)", a.Val)
+			if linkToParent || contactLink {
 				continue
 			}
 
-			newURL := p.URL.ResolveReference(url)
-			if newURL.Host == "" {
-				fmt.Println("**************", "Base", p.URL.String(), "Link", url)
-			}
-			p.ChildPages = append(p.ChildPages, &Page{URL: newURL})
+			url, _ := url.Parse(a.Val)
+			url = p.URL.ResolveReference(url)
+			p.ChildPages = append(p.ChildPages, &Page{URL: url, WordCounts: make(map[string]int)})
 			break
 		}
 	}
@@ -88,11 +89,24 @@ func childFromLinkTags(p *Page) *Parser {
 
 func wordCount(p *Page) *Parser {
 	condition := func(n *html.Node) bool {
-		return false
+		isTextNode := n.Type == html.TextNode && strings.TrimSpace(n.Data) != ""
+		ancestorsAreValid := true
+
+		for ancestor := n.Parent; ancestor != nil; ancestor = ancestor.Parent {
+			if ancestor.Type == html.ElementNode && (ancestor.Data == "script" || ancestor.Data == "style") {
+				ancestorsAreValid = false
+				break
+			}
+		}
+		return isTextNode && ancestorsAreValid
 	}
 
 	parseFunc := func(n *html.Node) {
-		// TODO
+		words := strings.Fields(n.Data)
+		for _, word := range words {
+			p.WordCounts[word]++
+		}
+		// fmt.Println(n.Data)
 	}
 	return &Parser{
 		ShouldParse: condition,

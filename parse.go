@@ -17,14 +17,19 @@ type Parser struct {
 }
 
 func parseNode(n *html.Node, parsers []*Parser) {
-	// fmt.Println("***", n.Data, "****")
-	for _, parser := range parsers {
-		if parser.ShouldParse(n) {
-			parser.Parse(n)
-		}
-	}
+	nodes := []*html.Node{n}
 
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		parseNode(c, parsers)
+	for len(nodes) > 0 {
+		node := nodes[0]
+		nodes = nodes[1:]
+		for i := range parsers {
+			if parsers[i].ShouldParse(node) {
+				parsers[i].Parse(node)
+			}
+		}
+
+		for c := node.FirstChild; c != nil; c = c.NextSibling {
+			nodes = append(nodes, c)
+		}
 	}
 }

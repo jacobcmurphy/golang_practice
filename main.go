@@ -24,7 +24,8 @@ func main() {
 	}
 
 	p := &Page{
-		URL: location,
+		URL:        location,
+		WordCounts: make(map[string]int),
 	}
 
 	fetchErr := p.FetchPage()
@@ -33,16 +34,20 @@ func main() {
 		return
 	}
 
+	fmt.Println("PAGE COUNT: ", len(p.ChildPages))
+
 	c := make(chan *Page, len(p.ChildPages))
 	errChan := make(chan error)
 	for i := range p.ChildPages {
-		go func(child *Page) {
+		go func(idx int) {
+			child := p.ChildPages[idx]
 			err := child.FetchPage()
 			if err != nil {
 				errChan <- err
 			}
 			c <- child
-		}(p.ChildPages[i])
+			fmt.Println(fmt.Sprintf("FINISHED %d", idx))
+		}(i)
 	}
 
 	for i := 0; i < len(p.ChildPages); i++ {
@@ -56,11 +61,17 @@ func main() {
 	close(c)
 	close(errChan)
 
-	countWords(append(p.ChildPages, p))
+	fmt.Println(countWords(append(p.ChildPages, p)))
 }
 
 func countWords(pages []*Page) map[string]int {
 	counts := make(map[string]int)
+
+	for _, page := range pages {
+		for word, count := range page.WordCounts {
+			counts[word] = counts[word] + count
+		}
+	}
 
 	return counts
 }
