@@ -2,21 +2,26 @@ package main
 
 import (
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"net/url"
 	"regexp"
 )
 
-func handler(w http.ResponseWriter, r *http.Request) {
-	urlStr := r.URL.Query().Get("url")
-	wordCount := getCounts(urlStr)
+func viewHandler(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	urlStr := r.Form.Get("url")
 
-	fmt.Fprintf(w, urlStr)
+	tpl, err := template.ParseFiles("index.html")
+	if err != nil {
+		fmt.Println("There was an error parsing file", err)
+	}
+	tpl.Execute(w, getCounts(urlStr))
 }
 
 func main() {
-	http.HandleFunc("/", handler)
+	http.HandleFunc("/", viewHandler)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
@@ -38,10 +43,8 @@ func getCounts(urlStr string) map[string]int {
 	fetchErr := p.FetchPage()
 	if fetchErr != nil {
 		fmt.Println("We could not fetch your main page.")
-		return
+		return make(map[string]int)
 	}
-
-	fmt.Println("PAGE COUNT: ", len(p.ChildPages))
 
 	c := make(chan *Page, len(p.ChildPages))
 	errChan := make(chan error)

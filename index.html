@@ -1,0 +1,14 @@
+<html>
+    <body>
+        <form action="/">
+            url:<br>
+            <input type="text" name="url"><br>
+            <input type="submit">
+        </form>
+        <ul>
+{{ range $word, $count := . }}
+   <li> {{ $word }}: {{ $count }} </li>
+{{ end }}
+</ul>
+</body>
+</html>
