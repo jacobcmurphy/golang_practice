@@ -2,18 +2,25 @@ package main
 
 import (
 	"fmt"
+	"log"
+	"net/http"
 	"net/url"
-	"os"
 	"regexp"
 )
 
-func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Please enter a URL.")
-		return
-	}
+func handler(w http.ResponseWriter, r *http.Request) {
+	urlStr := r.URL.Query().Get("url")
+	wordCount := getCounts(urlStr)
 
-	urlStr := os.Args[1]
+	fmt.Fprintf(w, urlStr)
+}
+
+func main() {
+	http.HandleFunc("/", handler)
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func getCounts(urlStr string) map[string]int {
 	match, _ := regexp.MatchString("^[http|//]", urlStr)
 	if !match {
 		urlStr = "https://" + urlStr
@@ -61,7 +68,7 @@ func main() {
 	close(c)
 	close(errChan)
 
-	fmt.Println(countWords(append(p.ChildPages, p)))
+	return countWords(append(p.ChildPages, p))
 }
 
 func countWords(pages []*Page) map[string]int {
